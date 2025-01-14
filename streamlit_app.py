@@ -1,6 +1,7 @@
-import numpy as np
-import pandas as pd
 import streamlit as st
+from ultralytics import YOLO
+
+model = YOLO("models/yolo11_best.pt")
 
 st.title('Docs Helper')
 
@@ -17,4 +18,12 @@ if uploaded_file is not None:
         st.write("You uploaded a PDF file.")
         # Add your PDF processing logic here
     elif uploaded_file.type == "image/jpeg":
-        st.image(uploaded_file, caption="Uploaded Image")
+        img_bytes = uploaded_file.getvalue()
+        with open("saved_image.jpg", "wb") as f:
+            f.write(img_bytes)
+        results = model("saved_image.jpg")
+        for result in results:
+            result.save(filename="result.jpg")
+        st.image("result.jpg", caption="Uploaded Image")
+
+
