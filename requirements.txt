@@ -1,2 +1,7 @@
 streamlit
 ultralytics
+PyPDF2
+pdf2image
+pandas
+Pillow
+pymupdf
