@@ -1,4 +1,5 @@
 import os
+import csv
 import streamlit as st
 import fitz  # PyMuPDF
 from PyPDF2 import PdfReader, PdfWriter
@@ -6,19 +7,40 @@ from ultralytics import YOLO
 import pandas as pd
 from PIL import Image
 
-# Настройки YOLO
-model = YOLO("models/yolo11_best.pt")
+@st.cache_resource
+def load_model():
+    model = YOLO("models/yolo11_best.pt")
+    return model
 
 @st.cache_data
 def process_images_with_yolo(page_files):
     results = model(page_files)
     return results
 
+def save_crops(result, crops_folder):
+    result.save_crop(save_dir=crops_folder)
+    crop_folder = os.path.join(crops_folder, "number")
+    crop_files = [os.path.join(crop_folder, f) for f in os.listdir(crop_folder) if f.endswith(".jpg")]
+    return list(set(crop_files))
+
+def extract_unique_crops(result, page_index, crops_folder):
+    page_folder = os.path.join(crops_folder, f"page_{page_index + 1}")
+    os.makedirs(page_folder, exist_ok=True)
+    # Проверяем, что в page_N еще не создана папка number
+    if not os.path.exists(os.path.join(page_folder, "number")):
+        result.save_crop(save_dir=page_folder)
+    number_folder = os.path.join(page_folder, "number")
+    if os.path.exists(number_folder):
+        crop_files = [os.path.join(number_folder, f) for f in os.listdir(number_folder) if f.endswith(".jpg")]
+    else:
+        crop_files = []
+    return crop_files
+
 # Папки для временных файлов
 UPLOAD_FOLDER = "uploads"
 PAGES_FOLDER = "pages"
 CROPS_FOLDER = "crops"
-SORTED_PDF = "sorted_acts.pdf"
+SORTED_PDF = "data/sorted_acts.pdf"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PAGES_FOLDER, exist_ok=True)
@@ -40,6 +62,15 @@ def pdf_to_images(pdf_path, output_folder):
         pix.save(image_path)
         print(f"Сохранено: {image_path}")
     doc.close()
+    return [os.path.join(output_folder, f) for f in os.listdir(output_folder) if f.endswith(".jpg")]
+
+# Проверка и загрузка данных из all_data.csv при старте
+if "all_data" not in st.session_state:
+    if os.path.exists("data/all_data.csv"):
+        st.session_state.all_data = pd.read_csv("data/all_data.csv").to_dict(orient="records")
+    else:
+        st.session_state.all_data = []
+
 
 if uploaded_pdf:
     # Сохраняем PDF
@@ -56,6 +87,7 @@ if uploaded_pdf:
 
     # Применяем YOLO для каждого изображения
     st.write("Обрабатываем страницы через YOLO...")
+    model = load_model()
     results = process_images_with_yolo(page_files)
 
     # Выводим результаты
@@ -65,12 +97,8 @@ if uploaded_pdf:
     for i, result in enumerate(results):
         if i in processed_pages:
             continue
-        result.save_crop(save_dir=CROPS_FOLDER)
-        crop_folder = os.path.join(CROPS_FOLDER, "number")
-        crop_files = [os.path.join(crop_folder, f) for f in os.listdir(crop_folder) if f.endswith(".jpg")]
-
-        # Убираем дублирование вырезанных кропов
-        crop_files = list(set(crop_files))
+        processed_pages.add(i)
+        crop_files = extract_unique_crops(result, i, CROPS_FOLDER)
 
         if crop_files:
             st.write(f"Страница {i + 1}: Вырезанные номера")
