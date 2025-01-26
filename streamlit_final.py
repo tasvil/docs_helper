@@ -17,14 +17,8 @@ def process_images_with_yolo(page_files):
     results = model(page_files)
     return results
 
-def save_crops(result, crops_folder):
-    result.save_crop(save_dir=crops_folder)
-    crop_folder = os.path.join(crops_folder, "number")
-    crop_files = [os.path.join(crop_folder, f) for f in os.listdir(crop_folder) if f.endswith(".jpg")]
-    return list(set(crop_files))
-
-def extract_unique_crops(result, page_index, crops_folder):
-    page_folder = os.path.join(crops_folder, f"page_{page_index + 1}")
+def extract_unique_crops(result, page_index, crops_folder, uploaded_file):
+    page_folder = os.path.join(crops_folder, f"{uploaded_file}_page_{page_index}")
     os.makedirs(page_folder, exist_ok=True)
     # Проверяем, что в page_N еще не создана папка number
     if not os.path.exists(os.path.join(page_folder, "number")):
@@ -36,11 +30,20 @@ def extract_unique_crops(result, page_index, crops_folder):
         crop_files = []
     return crop_files
 
-# Папки для временных файлов
+
+def append_data(uploaded_file, page_file, object_number):
+    data = pd.read_csv(DATA_FILE)
+    data = pd.concat([data, pd.DataFrame([{"uploaded_file": uploaded_file, "page": page_file, "object_number": object_number}])], ignore_index=True)
+    data.to_csv(DATA_FILE, index=False)
+
 UPLOAD_FOLDER = "uploads"
 PAGES_FOLDER = "pages"
 CROPS_FOLDER = "crops"
 SORTED_PDF = "data/sorted_acts.pdf"
+DATA_FILE = "data/all_data.csv"
+
+if not os.path.exists(DATA_FILE):
+    pd.DataFrame(columns=["uploaded_file", "page", "object_number"]).to_csv(DATA_FILE, index=False)
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PAGES_FOLDER, exist_ok=True)
@@ -53,23 +56,16 @@ st.title("Обработка актов с YOLO")
 uploaded_pdf = st.file_uploader("Загрузите PDF с актами", type="pdf")
 
 @st.cache_data
-def pdf_to_images(pdf_path, output_folder):
+def pdf_to_images(pdf_path, output_folder, uploaded_file):
     doc = fitz.open(pdf_path)
     for page_number in range(len(doc)):
         page = doc.load_page(page_number)
         pix = page.get_pixmap(dpi=200)
-        image_path = f"{output_folder}/page_{page_number + 1}.jpg"
+        image_path = f"{output_folder}/{uploaded_file}_page_{page_number + 1}.jpg"
         pix.save(image_path)
         print(f"Сохранено: {image_path}")
     doc.close()
     return [os.path.join(output_folder, f) for f in os.listdir(output_folder) if f.endswith(".jpg")]
-
-# Проверка и загрузка данных из all_data.csv при старте
-if "all_data" not in st.session_state:
-    if os.path.exists("data/all_data.csv"):
-        st.session_state.all_data = pd.read_csv("data/all_data.csv").to_dict(orient="records")
-    else:
-        st.session_state.all_data = []
 
 
 if uploaded_pdf:
@@ -80,9 +76,9 @@ if uploaded_pdf:
 
     # Разбиваем PDF на страницы
     st.write("Разбиваем PDF на страницы...")
-    pdf_to_images(pdf_path, PAGES_FOLDER)
+    pdf_to_images(pdf_path, PAGES_FOLDER, uploaded_pdf.name)
 
-    page_files = [os.path.join(PAGES_FOLDER, f) for f in os.listdir(PAGES_FOLDER) if f.endswith(".jpg")]
+    page_files = [os.path.join(PAGES_FOLDER, f) for f in os.listdir(PAGES_FOLDER) if f.startswith(uploaded_pdf.name) and f.endswith('.jpg')]
     st.write(f"Найдено страниц: {len(page_files)}")
 
     # Применяем YOLO для каждого изображения
@@ -90,46 +86,42 @@ if uploaded_pdf:
     model = load_model()
     results = process_images_with_yolo(page_files)
 
-    # Выводим результаты
-    data = []
+
     processed_pages = set()  # Для отслеживания обработанных страниц
 
-    for i, result in enumerate(results):
+    for i, result in enumerate(results, start=1):
         if i in processed_pages:
             continue
         processed_pages.add(i)
-        crop_files = extract_unique_crops(result, i, CROPS_FOLDER)
+        crop_files = extract_unique_crops(result, i, CROPS_FOLDER, uploaded_pdf.name)
 
         if crop_files:
-            st.write(f"Страница {i + 1}: Вырезанные номера")
+            st.write(f"Страница {i}: Вырезанные номера")
             for crop_file in crop_files:
-                st.image(crop_file, caption=f"Страница {i + 1}: Вырезанный номер")
+                st.image(crop_file, caption=f"Страница {i}: Вырезанный номер")
 
             # Ждем ввода числа пользователем
-            obj_number = st.text_input(f"Введите номер объекта для страницы {i + 1}", key=f"input_page_{i}")
+            obj_number = st.text_input(f"Введите номер объекта для страницы {i}", key=f"input_page_{i}")
 
             if obj_number:
-                data.append({"page_file": page_files[i], "object_number": obj_number})
+                append_data(uploaded_pdf.name, page_files[i - 1], obj_number)
 
-    # Сохраняем разметку в DataFrame
-    if data:
-        df = pd.DataFrame(data)
-        st.write("Собранные данные:", df)
 
-        # Сохранение отсортированного PDF
-        if st.button("Отсортировать и собрать в PDF"):
-            df_sorted = df.sort_values(by="object_number")
-            writer = PdfWriter()
+if st.button("Отсортировать и собрать в PDF"):
+    data = pd.read_csv(DATA_FILE)
+    data = data.drop_duplicates()
+    df_sorted = data.sort_values(by="object_number")
+    data.to_csv("data/sorted_data.csv", index=False)
+    writer = PdfWriter()
 
-            for _, row in df_sorted.iterrows():
-                page_image = Image.open(row["page_file"])
-                page_image.save(row["page_file"].replace(".jpg", ".pdf"))
+    for _, row in df_sorted.iterrows():
+        page_image = Image.open(row["page"])
+        page_image.save(row["page"].replace(".jpg", ".pdf"))
+        writer.add_page(PdfReader(row["page"].replace(".jpg", ".pdf")).pages[0])
 
-                writer.add_page(PdfReader(row["page_file"].replace(".jpg", ".pdf")).pages[0])
+    with open(SORTED_PDF, "wb") as output_pdf:
+        writer.write(output_pdf)
 
-            with open(SORTED_PDF, "wb") as output_pdf:
-                writer.write(output_pdf)
-
-            st.success("Готовый PDF собран и отсортирован!")
-            with open(SORTED_PDF, "rb") as f:
-                st.download_button("Скачать PDF", f, file_name="sorted_acts.pdf")
+    st.success("Готовый PDF собран и отсортирован!")
+    with open(SORTED_PDF, "rb") as f:
+        st.download_button("Скачать PDF", f, file_name="sorted_acts.pdf")
