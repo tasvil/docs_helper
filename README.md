@@ -47,7 +47,7 @@
    ```  
 3. Запустите приложение Streamlit:  
    ```bash  
-   streamlit run streamlit_app.py  
+   streamlit run main.py  
    ```  
  
 
