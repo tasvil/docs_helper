@@ -1,0 +1,16 @@
+# path: useful_general/Yolo Doc Helper/dataset_yolo
+train: images/train/
+val: images/val/
+
+# number of classes
+nc: 1
+
+# class names
+names:
+- number
+
+flipud: 0.1  # image flip up-down (probability)
+fliplr: 0.1  # image flip left-right (probability)
+degrees: 7.
+mosaic: 0.
+scale: 0.2
