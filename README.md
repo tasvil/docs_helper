@@ -17,7 +17,7 @@
 - **Экспорт:** Формирование нового PDF-документа, включающего все отсортированные акты. 
 
 ## Как работает приложение
-ВИДЕО [demo.webm](/files/demo.webm)
+Видео [demo.webm](/files)
 
 ## Технологии  
 - **Streamlit:** Интерфейс веб-приложения.  
@@ -38,8 +38,8 @@
 
 1. Склонируйте репозиторий:  
    ```bash  
-   git clone https://github.com/your-repository-name.git  
-   cd your-repository-name  
+   git clone https://github.com/tasvil/docs_helper.git
+   cd docs_helper 
    ```  
 2. Установите зависимости:  
    ```bash  
