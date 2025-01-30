@@ -6,6 +6,13 @@ from PyPDF2 import PdfReader, PdfWriter
 
 @st.cache_data
 def pdf_to_images(pdf_path, output_folder, uploaded_file):
+    """Преобразует PDF-файл в изображения и сохраняет их.
+
+    :param pdf_path: Путь к PDF-файлу.
+    :param output_folder: Папка для сохранения изображений.
+    :param uploaded_file: загруженный файл PDF
+    :return: Список путей к сохраненным изображениям.
+    """
     doc = fitz.open(pdf_path)
     for page_number in range(len(doc)):
         page = doc.load_page(page_number)
@@ -18,6 +25,11 @@ def pdf_to_images(pdf_path, output_folder, uploaded_file):
 
 
 def write_sorted_pdf(df_sorted, sorted_pdf_path):
+    """Собирает PDF-файл из JPG страниц в отсортированном порядке
+
+    :param df_sorted: Датасет с актами, отсортированными по порядку номеров объектов
+    :param sorted_pdf_path: Путь для сохранения отсортированного файла PDF
+    """
     writer = PdfWriter()
 
     for _, row in df_sorted.iterrows():

@@ -9,10 +9,24 @@ def load_model():
 
 @st.cache_data
 def process_images_with_yolo(page_files, _model):
+    """Функция детекции номеров объектов на изображениях
+
+    :param page_files: Список с актами в формате jpg, на которых необходимо обнаружить номера
+    :param _model: Загруженная модель (YOLO)
+    :return: Список результатов детекции модели
+    """
     results = _model(page_files)
     return results
 
 def extract_unique_crops(result, page_index, crops_folder, uploaded_file):
+    """Вырезает отдельные номера актов, распознанные моделью
+
+    :param result: результат детекции модели
+    :param page_index: Номер страницы загруженного файла
+    :param crops_folder: Путь для сохранения вырезанных номеров
+    :param uploaded_file: загруженный файл PDF
+    :return: Список вырезанных номеров объектов
+    """
     page_folder = os.path.join(crops_folder, f"{uploaded_file}_page_{page_index}")
     os.makedirs(page_folder, exist_ok=True)
     # Проверяем, что в page_N еще не создана папка number
